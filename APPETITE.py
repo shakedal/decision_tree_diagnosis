@@ -1,8 +1,10 @@
 import copy
 import numpy as np
 
+from DataSet import DataSet
 from SFL import get_SFL_for_diagnosis_nodes, get_prior_probs_left_right, get_diagnosis_single_fault
-from buildModel import map_tree
+from buildModel import map_tree, build_model, print_tree_rules
+
 
 def apply_appetite(tree, df, class_name, feature_types, diagnosis_alg="both", nodes_mean_values=None, train_data=None):
     """
@@ -23,7 +25,8 @@ def apply_appetite(tree, df, class_name, feature_types, diagnosis_alg="both", no
     model_rep = map_tree(tree)
 
     data_y = df[class_name]
-    features = df.columns.remove(class_name)
+    features = list(df.columns)
+    features.remove(class_name)
     data_x = df[features]
     prediction = tree.predict(data_x)
     samples = data_x, prediction, data_y
@@ -130,4 +133,29 @@ def filter_data_for_node(tree_rep, node, data_x):
     return filtered_data[indexes_filtered_data]
 
 if __name__ == '__main__':
-    pass
+    dataset = DataSet("analcatdata_boxing1.csv", "diagnosis_check", "Winner", ["categorical", "binary", "numeric"], (0.7,0.1,0.2))
+    concept_size = dataset.before_size
+    train = dataset.data.iloc[0:int(0.9 * concept_size)]
+    validation = dataset.data.iloc[int(0.9 * concept_size):concept_size]
+    model = build_model(train, dataset.features, dataset.target, val_data=validation)
+    tree_rep = map_tree(model)
+
+    test_data = dataset.data.iloc[concept_size:]
+    test_data_x = test_data[dataset.features]
+    prediction = model.predict(test_data_x)
+    test_data_y = test_data[dataset.target]
+
+    diagnosis, fixed_model = apply_appetite(model, test_data, dataset.target, ["C","B","N"], diagnosis_alg="both", nodes_mean_values=None, train_data=train)
+    print(f"diagnosis: {diagnosis}")
+    faulty_feature = model.tree_.feature[diagnosis]
+    if faulty_feature == -2:
+        print("diagnosed node is a leaf")
+    else:
+        feature_name = dataset.features[faulty_feature]
+        print(f"faulty feature: {feature_name}")
+    print("tree before fix")
+    print_tree_rules(model, dataset.features)
+    print("tree after fix")
+    print_tree_rules(fixed_model, dataset.features)
+
+
